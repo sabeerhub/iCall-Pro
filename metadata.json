@@ -1,0 +1,6 @@
+{
+  "name": "iCall - WebRTC Audio Calling",
+  "description": "A production-grade WebRTC audio calling app with native iPhone-style incoming call experience, username identity, and friend-only permissions.",
+  "requestFramePermissions": ["microphone", "notifications"],
+  "majorCapabilities": ["WebRTC", "Firebase", "Real-time Messaging"]
+}

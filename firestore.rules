@@ -1,0 +1,108 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Health Check
+    match /_health_/{id} {
+      allow get: if true;
+    }
+
+    // Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    function isFriend(userA, userB) {
+      return exists(/databases/$(database)/documents/friends/$(userA)/activeFriends/$(userB));
+    }
+
+    // User Profile
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if false; // No blanket listing
+      allow create, update: if isOwner(userId);
+    }
+
+    // Username Registry (Uniqueness)
+    match /usernames/{username} {
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && !exists(/databases/$(database)/documents/usernames/$(username));
+      allow delete: if isOwner(existing().userId);
+    }
+
+    // Friend Requests
+    match /friendRequests/{requestId} {
+      allow get: if isSignedIn() && (isOwner(existing().senderId) || isOwner(existing().receiverId));
+      allow list: if isSignedIn() && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+      allow create: if isSignedIn() && isOwner(incoming().senderId) && incoming().status == 'pending' && incoming().senderId != incoming().receiverId;
+      allow update: if isSignedIn() && isOwner(existing().receiverId) && 
+        incoming().status in ['accepted', 'rejected'] &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if isOwner(existing().senderId) || isOwner(existing().receiverId);
+    }
+
+    // Friendship
+    match /friends/{userId}/activeFriends/{friendUserId} {
+      allow read: if isSignedIn() && isOwner(userId);
+      allow write: if isSignedIn() && isOwner(userId); 
+    }
+
+    // Calls
+    match /calls/{callId} {
+      function isValidCall(data) {
+        return data.callerId is string && data.receiverId is string &&
+               data.state in ['calling', 'ringing', 'connected', 'ended', 'declined', 'missed'];
+      }
+
+      allow get: if isSignedIn() && (isOwner(existing().callerId) || isOwner(existing().receiverId));
+      allow list: if isSignedIn() && resource.data.callerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.receiverId == request.auth.uid;
+      
+      allow create: if isSignedIn() && isOwner(incoming().callerId) && 
+                      isFriend(incoming().callerId, incoming().receiverId) &&
+                      incoming().state == 'calling' &&
+                      isValidCall(incoming());
+
+      allow update: if isSignedIn() && (isOwner(existing().callerId) || isOwner(existing().receiverId)) &&
+                      isValidCall(incoming()) &&
+                      (
+                        // Receiver transitions
+                        (isOwner(existing().receiverId) && existing().state == 'calling' && incoming().state in ['ringing', 'connected', 'declined']) ||
+                        (isOwner(existing().receiverId) && existing().state == 'ringing' && incoming().state in ['connected', 'declined']) ||
+                        // Caller transitions
+                        (isOwner(existing().callerId) && existing().state == 'calling' && incoming().state == 'missed') ||
+                        // Either transitions to ended
+                        (incoming().state == 'ended' && existing().state == 'connected')
+                      );
+    }
+
+    // ICE Candidates
+    match /calls/{callId}/candidates/{candidateId} {
+      allow get: if isSignedIn() && (
+        isOwner(get(/databases/$(database)/documents/calls/$(callId)).data.callerId) ||
+        isOwner(get(/databases/$(database)/documents/calls/$(callId)).data.receiverId)
+      );
+      allow list: if isSignedIn() && (
+        isOwner(get(/databases/$(database)/documents/calls/$(callId)).data.callerId) ||
+        isOwner(get(/databases/$(database)/documents/calls/$(callId)).data.receiverId)
+      );
+      allow create: if isSignedIn() && isOwner(incoming().senderId) && (
+        isOwner(get(/databases/$(database)/documents/calls/$(callId)).data.callerId) ||
+        isOwner(get(/databases/$(database)/documents/calls/$(callId)).data.receiverId)
+      );
+    }
+
+    // Call History
+    match /callHistory/{historyId} {
+      allow get: if isSignedIn() && (isOwner(existing().callerId) || isOwner(existing().receiverId));
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() && (isOwner(incoming().callerId) || isOwner(incoming().receiverId));
+    }
+  }
+}

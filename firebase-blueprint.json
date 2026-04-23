@@ -1,0 +1,114 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information and identity.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "displayName": { "type": "string" },
+        "fcmToken": { "type": "string" },
+        "onlineStatus": { "type": "string", "enum": ["online", "offline"] }
+      },
+      "required": ["username", "displayName"]
+    },
+    "Username": {
+      "title": "Username Mapping",
+      "description": "Mapping from unique username to userId to ensure global uniqueness.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" }
+      },
+      "required": ["userId"]
+    },
+    "FriendRequest": {
+      "title": "Friend Request",
+      "description": "Pending, accepted, or rejected friend requests.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "receiverId", "status", "createdAt"]
+    },
+    "Friendship": {
+      "title": "Friendship Record",
+      "description": "Indicates a bidirectional friendship between two users.",
+      "type": "object",
+      "properties": {
+        "isFriend": { "type": "boolean" }
+      },
+      "required": ["isFriend"]
+    },
+    "Call": {
+      "title": "Call Signaling",
+      "description": "WebRTC signaling document for a call attempt.",
+      "type": "object",
+      "properties": {
+        "callerId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "state": { "type": "string", "enum": ["idle", "calling", "ringing", "connected", "ended", "declined", "missed"] },
+        "offer": { "type": "object" },
+        "answer": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["callerId", "receiverId", "state", "createdAt"]
+    },
+    "CallHistory": {
+      "title": "Call History",
+      "description": "Record of a completed or failed call.",
+      "type": "object",
+      "properties": {
+        "callerId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "state": { "type": "string" },
+        "duration": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["callerId", "receiverId", "state", "timestamp"]
+    },
+    "IceCandidate": {
+      "title": "ICE Candidate",
+      "description": "WebRTC network candidate for NAT traversal.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "candidate": { "type": "object" }
+      },
+      "required": ["senderId", "candidate"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data."
+    },
+    "/usernames/{username}": {
+      "schema": "Username",
+      "description": "Unique username registry."
+    },
+    "/friendRequests/{requestId}": {
+      "schema": "FriendRequest",
+      "description": "Collection of friend requests."
+    },
+    "/friends/{userId}/activeFriends/{friendUserId}": {
+      "schema": "Friendship",
+      "description": "Subcollection documenting a user's friends."
+    },
+    "/calls/{callId}": {
+      "schema": "Call",
+      "description": "Real-time call signaling state."
+    },
+    "/calls/{callId}/candidates/{candidateId}": {
+      "schema": "IceCandidate",
+      "description": "ICE candidate exchange subcollection."
+    },
+    "/callHistory/{historyId}": {
+      "schema": "CallHistory",
+      "description": "Archive of past calls."
+    }
+  }
+}
